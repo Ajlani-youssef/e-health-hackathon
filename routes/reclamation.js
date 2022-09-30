@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const jwt_decode = require("jwt-decode");
 const fs = require("fs");
+const axios = require("axios");
 
 router.post("/add-reclamation", verifyToken, async (req, res) => {
   const { drug } = req.body;
@@ -24,22 +25,42 @@ router.post("/add-reclamation", verifyToken, async (req, res) => {
         ? 0
         : reclamations[reclamations.length - 1]["id"] + 1;
 
-    reclamation = {
-      id: id,
-      sender: user["id"],
-      senderRole: user["role"],
-      date: Date.now(),
-      yes: 0,
-      no: 0,
-      drug: drug,
-    };
-    reclamations.push(reclamation);
-    data["reclamations"] = reclamations;
-    fs.writeFileSync("../data.json", JSON.stringify(data));
-    csv = `\r\n${drug},${Date.now()},${user["localisation"]},${user["role"]}`;
-    fs.appendFileSync("../reclamation-logs.csv", csv);
-    return res.sendStatus(200);
+    axios
+      .post("https://9d08-196-203-237-137.eu.ngrok.io/predict", {
+        medicament: 3,
+        datereclamation: 20220603,
+        region: 3,
+        source: 1,
+      })
+      .then((resultat) => {
+        reclamation = {
+          id: id,
+          sender: user["id"],
+          senderRole: user["role"],
+          date: Date.now(),
+          yes: 0,
+          no: 0,
+          drug: drug,
+          risque: resultat.data["prediction"],
+        };
+        reclamations.push(reclamation);
+        data["reclamations"] = reclamations;
+        fs.writeFileSync("../data.json", JSON.stringify(data));
+        csv = `\r\n${drug},${Date.now()},${user["localisation"]},${
+          user["role"]
+        }`;
+        fs.appendFileSync("../reclamation-logs.csv", csv);
+        return res.sendStatus(200);
+      })
+      .catch((error) => {
+        console.log(error);
+        return res.status(409).json({
+          success: false,
+          msg: "sorry there's a problem. please try again",
+        });
+      });
   } catch (err) {
+    console.log(err);
     return res.status(409).json({
       success: false,
       msg: "sorry there's a problem. please try again",
